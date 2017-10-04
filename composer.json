@@ -1,0 +1,17 @@
+{
+	"name": "coralie-orm",
+	"description": "ActiveRecord ORM module",
+	"license": "MIT",
+	"authors": [
+		{
+			"name": "Tim Wilson",
+			"email": "admin@aranode.com"
+		}
+	],
+	"require": {},
+	"autoload": {
+		"psr-4": {
+			"Coralie\\": ""
+		}
+	}
+}
