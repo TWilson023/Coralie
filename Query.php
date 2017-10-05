@@ -13,6 +13,7 @@ abstract class QueryTypes
 	const SELECT = 'select';
 	const INSERT = 'insert';
 	const UPDATE = 'update';
+	const DELETE = 'delete';
 }
 
 class Query
@@ -26,7 +27,7 @@ class Query
 	 * QueryTypes specifier.
 	 * @var string
 	 */
-	protected $type;
+	protected $type = QueryTypes::SELECT;
 
 	/**
 	 * Columns to select/affect.
@@ -115,6 +116,32 @@ class Query
 
 		return $this;
 	}
+	
+	/**
+	 * Initiate a DELETE query with optional WHERE constraints.
+	 * 
+	 * @param mixed (optional) $column Column or expression (s) to compare.
+	 * @param mixed $operator (optional) Comparison operator (e.g. '=' or '<').
+	 * @param mixed $value (optional) Value with which to compare.
+	 * 
+	 * @return Query
+	 */
+	public function delete(
+			$column = null,
+			?string $operator = null,
+			$value = null): Query
+	{
+		$this->type = QueryTypes::DELETE;
+		
+		if ($column !== null)
+			return $this->where(
+					$column,
+					$operator,
+					$value,
+					'AND');
+		
+		return $this;
+	}
 
 	/**
 	 * Adds an AND clause to the query constraints.
@@ -127,7 +154,7 @@ class Query
 	 */
 	public function and(
 			$column,
-			?string $operator = null,
+			?string $operator,
 			$value = null): Query
 	{
 		return $this->where(
@@ -148,7 +175,7 @@ class Query
 	 */
 	public function or(
 		$column,
-		?string $operator = null,
+		?string $operator,
 		$value = null)
 	{
 		return $this->where(
@@ -157,7 +184,7 @@ class Query
 				$value,
 				'OR');
 	}
-
+	
 	/**
 	 * @param callable|array|mixed $column Column or expression (s) to compare.
 	 * @param string $operator Comparison operator (e.g. '=' or '<').
@@ -169,10 +196,10 @@ class Query
 	 */
 	public function where(
 			$column,
-			?string $operator = null,
+			?string $operator,
 			$value = null,
 			string $bool = 'AND'): Query
-	{
+	{	
 		if (is_array($column))
 		{
 			// Two-dimensional comparison array
@@ -198,10 +225,15 @@ class Query
 					$column,
 					$bool);
 		
+		if (!in_array(
+				$operator,
+				$this->dialect->comparisonOperators))
+			list($operator, $value) = ['=', $operator];
+		
 		return $this->addWhere(
 				$column,
-				func_num_args() > 2 ? $operator : '=',
-				func_num_args() > 2 ? $value : $operator,
+				$operator ?? '=',
+				$value,
 				$bool);
 	}
 
@@ -297,8 +329,7 @@ class Query
 	public function execute()
 	{
 		// Call the connection's run[Type] method
-		$method = "run" . ucfirst($this->type);
-		return $this->connection->$method(
+		return $this->connection->{"run" . ucfirst($this->type)}(
 				$this->build(),
 				$this->params);
 	}
@@ -308,17 +339,8 @@ class Query
 	 */
 	public function build(): string
 	{
-		switch ($this->type)
-		{
-			case QueryTypes::INSERT:
-				return $this->dialect->composeInsert($this);
-
-			case QueryTypes::UPDATE:
-				return $this->dialect->composeUpdate($this);
-
-			default:
-				return $this->dialect->composeSelect($this);
-		}
+		// Call the dialect's compose[Type] method
+		return $this->dialect->{"compose" . ucfirst($this->type)}($this);
 	}
 
 	public function __toString(): string

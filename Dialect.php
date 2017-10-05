@@ -12,8 +12,16 @@ namespace Coralie;
 abstract class Dialect
 {
 	/**
-	 * @var string
+	 * Valid comparison operators.
+	 * 
+	 * @var array
+	 */
+	public $comparisonOperators = ['<', '>', '<=', '>=', '='];
+	
+	/**
 	 * Symbols to quote identifiers (two chars if different beginning and end).
+	 * 
+	 * @var string
 	 */
 	protected $identifierQuotes = '"';
 
@@ -235,7 +243,7 @@ abstract class Dialect
 	}
 
 	/**
-	 * Composes an INSERT query to be executed.
+	 * Composes an UPDATE query to be executed.
 	 *
 	 * @param Query $query Query instance to build with.
 	 *
@@ -252,6 +260,22 @@ abstract class Dialect
 					return $this->quoteIdentifier($column) . "=?";
 				}, $query->columns), false),
 
+				$this->prepareWhere($query->where));
+	}
+	
+	/**
+	 * Composes a DELETE query to be executed.
+	 * 
+	 * @param Query $query Query instance to build with.
+	 * 
+	 * @return string Execution-ready query string.
+	 */
+	public function composeDelete(Query $query): string
+	{
+		return $this->compose(
+				"DELETE FROM " . $this->quoteIdentifier(
+						$this->table,
+						false),
 				$this->prepareWhere($query->where));
 	}
 

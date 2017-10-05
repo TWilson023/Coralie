@@ -101,6 +101,18 @@ abstract class DatabaseConnection
 				$sql,
 				$params);
 	}
+	
+/**
+	 * @see DatabaseConnection::runStatement
+	 */
+	public function runDelete(
+			string $sql,
+			array $params): bool
+	{
+		return $this->runStatement(
+				$sql,
+				$params);
+	}
 
 	/**
 	 * Executes a raw SQL statement.

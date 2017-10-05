@@ -16,7 +16,8 @@
 			{
 				echo "<h1>$article->title</h1>";
 				echo "<p>$article->content</p>";
-				echo "<a href='update.php?id=" . $article->id . "'>Update</a>";
+				echo "<a href='update.php?id=$article->id'>Update</a>";
+				echo "<a href='delete.php?id=$article->id'>Delete</a>";
 			}
 		?>
 		
