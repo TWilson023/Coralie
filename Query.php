@@ -14,6 +14,10 @@ abstract class QueryTypes
 	const INSERT = 'insert';
 	const UPDATE = 'update';
 	const DELETE = 'delete';
+	
+	const CREATE_TABLE = 'create';
+	const DROP_TABLE = 'dropTable';
+	const ALTER_TABLE = 'alterTable';
 }
 
 class Query
@@ -31,9 +35,21 @@ class Query
 
 	/**
 	 * Columns to select/affect.
-	 * @var array|null
+	 * @var (string|\Coralie\Schema\Column)[]|null
 	 */
 	public $columns;
+	
+	/**
+	 * Columns to add.
+	 * @var \Coralie\Schema\Column[]
+	 */
+	public $addedColumns;
+	
+	/**
+	 * Columns to drop.
+	 * @var \Coralie\Schema\Column[]
+	 */
+	public $droppedColumns;
 
 	/**
 	 * Array of where constraints with the following format:
@@ -139,6 +155,56 @@ class Query
 					$operator,
 					$value,
 					'AND');
+		
+		return $this;
+	}
+	
+	/**
+	 * Initiate a CREATE TABLE query with the specified columns.
+	 * 
+	 * @param \Coralie\Schema\Column[] $columns Column objects.
+	 * 
+	 * @return Query
+	 */
+	public function createTable(
+			array $columns): Query
+	{
+		$this->type = QueryTypes::CREATE_TABLE;
+		$this->columns = $columns;
+		
+		return $this;
+	}
+	
+	/**
+	 * Initiate an ALTER TABLE query with the specified columns.
+	 * 
+	 * @param \Coralie\Schema\Column[] $toAdd Columns to add.
+	 * @param \Coralie\Schema\Column[] $toAlter Columns to alter.
+	 * @param \Coralie\Schema\Column[] $toDrop Columns to drop.
+	 * 
+	 * @return Query
+	 */
+	public function alterTable(
+			array $toAdd = [],
+			array $toAlter = [],
+			array $toDrop = []): Query
+	{
+		$this->type = QueryTypes::ALTER_TABLE;
+		$this->addedColumns = $toAdd;
+		$this->columns = $toAlter;
+		$this->droppedColumns = $toDrop;
+		
+		return $this;
+	}
+	
+	/**
+	 * Initiate a DROP TABLE query.
+	 * 
+	 * @return Query
+	 */
+	public function dropTable(): Query
+	{
+		$this->type = QueryTypes::DROP_TABLE;
 		
 		return $this;
 	}
@@ -328,6 +394,7 @@ class Query
 	 */
 	public function execute()
 	{
+		echo $this->build() . "<br><br>";
 		// Call the connection's run[Type] method
 		return $this->connection->{"run" . ucfirst($this->type)}(
 				$this->build(),

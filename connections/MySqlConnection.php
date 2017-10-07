@@ -14,11 +14,11 @@ use Coralie\DatabaseConnection;
 class MySqlConnection extends DatabaseConnection
 {
     /**
-     * @see DatabaseConnection::init()
+     * @see DatabaseConnection::__construct()
      */
-    public function init(array $settings): void
+    public function __construct(array $settings)
     {
-        parent::init($settings);
+        parent::__construct($settings);
         
         $this->dialectClass = \Coralie\Dialects\MySqlDialect::class;
     }

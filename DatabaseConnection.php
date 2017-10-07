@@ -11,8 +11,6 @@ namespace Coralie;
 
 abstract class DatabaseConnection
 {
-	use Traits\Singleton;
-
 	/**
 	 * @var \PDO
 	 */
@@ -24,12 +22,15 @@ abstract class DatabaseConnection
 	 */
 	protected $dialectClass;
 
-	public function init(array $settings): void
+	/**
+	 * @param array $settings Connection/authentication settings.
+	 */
+	public function __construct(array $settings)
 	{
-		$connString = $settings["type"] . ":" .
-			"host=" . $settings["host"] . ";" .
-			"dbname=" . $settings["database"] . ";" .
-			"charset=" . $settings["charset"];
+		$connString = $settings['type'] . ":" .
+			"host=" . $settings['host'] . ";" .
+			"dbname=" . $settings['database'] . ";" .
+			"charset=" . $settings['charset'];
 
 		$options = [
 				\PDO::ATTR_ERRMODE				=> \PDO::ERRMODE_EXCEPTION,
@@ -39,8 +40,8 @@ abstract class DatabaseConnection
 
 		$this->pdo = new \PDO(
 				$connString,
-				$settings["username"],
-				$settings["password"],
+				$settings['username'],
+				$settings['password'],
 				$options);
 	}
 
@@ -79,42 +80,6 @@ abstract class DatabaseConnection
 	}
 
 	/**
-	 * @see DatabaseConnection::runStatement
-	 */
-	public function runInsert(
-			string $sql,
-			array $params): bool
-	{
-		return $this->runStatement(
-				$sql,
-				$params);
-	}
-
-	/**
-	 * @see DatabaseConnection::runStatement
-	 */
-	public function runUpdate(
-			string $sql,
-			array $params): bool
-	{
-		return $this->runStatement(
-				$sql,
-				$params);
-	}
-	
-/**
-	 * @see DatabaseConnection::runStatement
-	 */
-	public function runDelete(
-			string $sql,
-			array $params): bool
-	{
-		return $this->runStatement(
-				$sql,
-				$params);
-	}
-
-	/**
 	 * Executes a raw SQL statement.
 	 *
 	 * @param string $sql Execution-ready SQL query.
@@ -129,6 +94,12 @@ abstract class DatabaseConnection
 		$statement = $this->pdo->prepare($sql);
 
 		return $statement->execute($params);
+	}
+	
+	public function __call(string $name, array $parameters)
+	{
+		if (substr($name, 0, 3) === 'run' && count($parameters) === 2)
+			return $this->runStatement(...$parameters);
 	}
 
 	/**

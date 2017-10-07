@@ -2,6 +2,9 @@
 
 namespace Coralie;
 
+use Coralie\Schema\Column;
+use Coralie\Schema\ColumnTypes;
+
 /**
  * @author Tim Wilson
  * @copyright 2017 Aranode LLC
@@ -24,6 +27,25 @@ abstract class Dialect
 	 * @var string
 	 */
 	protected $identifierQuotes = '"';
+	
+	/**
+	 * Data type names and lengths
+	 * 
+	 * @var array
+	 */
+	protected $dataTypes = [
+			ColumnTypes::INTEGER => ['INTEGER'],
+			ColumnTypes::SMALLINT => ['SMALLINT'],
+			ColumnTypes::DECIMAL => ['DECIMAL'],
+			ColumnTypes::FLOAT => ['FLOAT'],
+			ColumnTypes::BIT => ['BIT'],
+			ColumnTypes::CHARACTER => ['CHARACTER'],
+			ColumnTypes::VARCHAR => ['VARCHAR', 65535],
+			ColumnTypes::DATE => ['DATE'],
+			ColumnTypes::TIME => ['TIME'],
+			ColumnTypes::TIMESTAMP => ['TIMESTAMP'],
+			ColumnTypes::BOOLEAN => ['BOOLEAN'],
+	];
 
 	/**
 	 * @var DatabaseConnection
@@ -84,23 +106,171 @@ abstract class Dialect
 	 * Converts an array of columns to a query-ready string.
 	 *
 	 * @param array $columns Array of column names.
-	 * @param bool $prefix (optional) Whether the columns should be prefixed
-	 * 		  with the table (default: true).
+	 * @param bool $prefixTable (optional) Whether the columns should be
+	 * 		  prefixed with the table (default: true).
 	 * @param bool $parentheses (optional) Whether the columns should be
 	 * 		  encapsulated with parentheses (default: false).
+	 * @param string $prefix String to prepend each typed column with (separated
+	 * 		  by a space).
 	 *
 	 * @return string Query-ready column string.
 	 */
 	protected function prepareColumns(
 			array $columns,
-			bool $prefix = true,
-			bool $parentheses = false): string
+			bool $prefixTable = true,
+			bool $parentheses = false,
+			string $prefix = ""): string
 	{
-		return $this->prepareList(array_map(function ($column) use ($prefix) {
-			return $this->quoteIdentifier(
+		return $this->prepareList(array_map(function ($column)
+				use ($prefixTable, $prefix) {
+			$quoted = $this->quoteIdentifier(
 					$column,
-					$prefix);
+					$prefixTable);
+			
+			return (strlen($prefix) ? "$prefix " : "") . $quoted;
 		}, $columns), $parentheses);
+	}
+	
+	/**
+	 * Converts an array of Column objects to a query-ready string for addition.
+	 * 
+	 * @param array $columns
+	 * @param bool $includeKey whether primary keys should be specified.
+	 * 
+	 * @return string|null Query-ready column string.
+	 */
+	protected function prepareAddColumns(
+			array $columns,
+			bool $includeKey = false): ?string
+	{
+		if (!$columns) return null;
+		
+		return $this->prepareTypedColumns(
+				$columns,
+				false,
+				"ADD",
+				$includeKey);
+	}
+	
+	/**
+	 * Converts an array of Column objects to a query-ready string for changing.
+	 * 
+	 * @param array $columns
+	 * @param bool $includeKey whether primary keys should be specified.
+	 * 
+	 * @return string|null Query-ready column string.
+	 */
+	protected function prepareAlterColumns(
+			array $columns,
+			bool $includeKey = false): ?string
+	{
+		if (!$columns) return null;
+		
+		return $this->prepareTypedColumns(
+				$columns,
+				false,
+				"MODIFY",
+				$includeKey);
+	}
+	
+	/**
+	 * Converts an array of Column objects to a query-ready string for dropping.
+	 * 
+	 * @param array $columns
+	 * 
+	 * @return string|null Query-ready column string.
+	 */
+	protected function prepareDropColumns(array $columns): ?string
+	{
+		if (!$columns) return null;
+		
+		return $this->prepareColumns(
+				array_map(function (Column $column) {
+					return $column->name;
+				}, $columns),
+				false,
+				false,
+				"DROP COLUMN");
+	}
+	
+	/**
+	 * Converts an array of Column objects to a query-ready string.
+	 *
+	 * @param Column[] $columns Array of Column objects.
+	 * @param bool $parentheses (optional) Whether the columns should be
+	 * 		  encapsulated with parentheses (default: false).
+	 * @param string $prefix String to prepend each typed column with (separated
+	 * 		  by a space).
+	 * @param bool $includeKey whether primary keys should be specified.
+	 *
+	 * @return string Query-ready column string.
+	 */
+	protected function prepareTypedColumns(
+			array $columns,
+			bool $parentheses = true,
+			string $prefix = "",
+			bool $includeKey = true): string
+	{
+		// List items to be appended to the end (e.g. PRIMARY KEY (col))
+		$appends = [];
+		
+		$items = array_map(function (Column $column)
+				use (&$appends, $prefix, $includeKey) {
+			$parts = [];
+			
+			if (strlen($prefix))
+				$parts[] = $prefix;
+			
+			$quotedName = $this->quoteIdentifier(
+					$column->name,
+					false);
+			
+			// Column name
+			$parts[] = $quotedName;
+			
+			// Column type
+			$parts[] = $this->prepareDataType(
+					$column->type,
+					$column->length);
+			
+			// Column properties
+			if ($column->properties)
+				$parts[] = implode(
+						' ',
+						$column->properties);
+			
+			if ($column->isPrimary && $includeKey)
+				$appends[] = "PRIMARY KEY ($quotedName)";
+			
+			return implode(' ', $parts);
+		}, $columns);
+		
+		return $this->prepareList(
+				array_merge(
+						$items,
+						$appends),
+				$parentheses);
+	}
+	
+	/**
+	 * Prepares a query-ready data type string.
+	 * 
+	 * @param int $type ColumnTypes Data type.
+	 * @param float $length Data type length/size.
+	 * 
+	 * @throws Exceptions\InvalidDataTypeException
+	 * @return string Query-ready data type string.
+	 */
+	protected function prepareDataType(
+			int $type,
+			float $length): string
+	{
+		if (!isset($this->dataTypes[$type]))
+			throw new Exceptions\InvalidDataTypeException();
+		
+		$length = ($length > -1) ?: ($this->dataTypes[$type][1] ?? -1);
+		
+		return $this->dataTypes[$type][0] . ($length > -1 ? "($length)" : "");
 	}
 
 	/**
@@ -116,7 +286,7 @@ abstract class Dialect
 	{
 		$sql = implode(
 				",",
-				$values);
+				array_filter($values));
 
 		return $parentheses ? "($sql)" : $sql;
 	}
@@ -278,5 +448,55 @@ abstract class Dialect
 						false),
 				$this->prepareWhere($query->where));
 	}
-
+	
+	/**
+	 * Composes a CREATE TABLE (IF NOT EXISTS) query to be executed.
+	 * 
+	 * @param Query $query Query instance to build with.
+	 * 
+	 * @return string Execution-ready query string.
+	 */
+	public function composeCreate(Query $query): string
+	{
+		return $this->compose(
+				"CREATE TABLE IF NOT EXISTS " . $this->quoteIdentifier(
+						$this->table,
+						false),
+				$this->prepareTypedColumns($query->columns));
+	}
+	
+	/**
+	 * Composes a CREATE TABLE (IF NOT EXISTS) query to be executed.
+	 * 
+	 * @param Query $query Query instance to build with.
+	 * 
+	 * @return string Execution-ready query string.
+	 */
+	public function composeAlterTable(Query $query): string
+	{
+		return $this->compose(
+				"ALTER TABLE " . $this->quoteIdentifier(
+						$this->table,
+						false),
+				$this->prepareList([
+						$this->prepareAddColumns($query->addedColumns),
+						$this->prepareAlterColumns($query->columns),
+						$this->prepareDropColumns($query->droppedColumns)
+				], false));
+	}
+	
+	/**
+	 * Composes a DROP TABLE (IF EXISTS) query to be executed.
+	 * 
+	 * @param Query $query Query instance to build with.
+	 * 
+	 * @return string Execution-ready query string.
+	 */
+	public function composeDropTable(Query $query): string
+	{
+		return $this->compose(
+				"DROP TABLE IF EXISTS " . $this->quoteIdentifier(
+						$this->table,
+						false));
+	}
 }
